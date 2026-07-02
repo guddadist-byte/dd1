@@ -249,7 +249,7 @@ async def manage_user(callback: CallbackQuery):
         return
 
     status = user["status"]
-    role = user.get("role", "user")
+    role = user["role"] if user["role"] else "user"
     text = (
         f"👤 <b>{user['full_name']}</b>\n"
         f"Username: @{user['username'] or 'нет'}\n"
@@ -296,7 +296,7 @@ async def set_user_status(callback: CallbackQuery):
         f"Статус: <b>{new_status}</b>\n\n"
         "Действие выполнено."
     )
-    await callback.message.edit_text(text, reply_markup=get_user_status_keyboard(target_id, new_status, user.get("role", "user")), parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=get_user_status_keyboard(target_id, new_status, user["role"] if user["role"] else "user"), parse_mode="HTML")
 
 
 @dp.callback_query(F.data.startswith("set_role:"))
@@ -522,7 +522,7 @@ async def show_active_orders(callback: CallbackQuery):
         text = "🟢 <b>Активные заказы</b>\n\n"
         kb_buttons = []
         for order in orders:
-            profile = order.get("profile_name", "Неизвестный профиль")
+            profile = order["profile_name"] if order["profile_name"] else "Неизвестный профиль"
             text += (
                 f"📦 <b>{order['item_title']}</b>\n"
                 f"📍 Профиль: <b>{profile}</b>\n"
@@ -553,7 +553,7 @@ async def show_delivered_orders(callback: CallbackQuery):
     else:
         text = "✅ <b>Доставленные заказы</b>\n\n"
         for order in orders:
-            profile = order.get("profile_name", "Неизвестный профиль")
+            profile = order["profile_name"] if order["profile_name"] else "Неизвестный профиль"
             text += (
                 f"📦 <b>{order['item_title']}</b>\n"
                 f"📍 Профиль: <b>{profile}</b>\n"
