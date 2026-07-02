@@ -126,10 +126,14 @@ async def cmd_start(message: Message, state: FSMContext):
     username = message.from_user.username or ""
     full_name = message.from_user.full_name or ""
 
+    logger.info(f"[DEBUG cmd_start] user_id={user_id}, username=@{username}, full_name={full_name}")
+
     # Проверяем, есть ли уже пользователь
     existing_user = await db.get_user(user_id)
+    logger.info(f"[DEBUG cmd_start] existing_user = {existing_user}")
 
     if await db.is_owner(user_id):
+        logger.info("[DEBUG cmd_start] → Owner branch")
         await message.answer(
             "👋 Привет, владелец!\n\n"
             "Ты имеешь полный доступ к боту.\n"
@@ -142,6 +146,7 @@ async def cmd_start(message: Message, state: FSMContext):
         return
 
     if existing_user:
+        logger.info(f"[DEBUG cmd_start] → Existing user, status={existing_user['status']}")
         if existing_user["status"] == "approved":
             await message.answer(
                 f"✅ Привет, {full_name.split()[0]}!\n\n"
@@ -156,6 +161,7 @@ async def cmd_start(message: Message, state: FSMContext):
         return
 
     # Новый пользователь — начинаем регистрацию с сбором данных
+    logger.info("[DEBUG cmd_start] → New user → starting registration")
     await state.update_data(telegram_id=user_id, username=username)
     await message.answer("👋 Добро пожаловать!\n\nДля подключения к боту, пожалуйста, введите ваше **ФИО** (полностью):")
     await state.set_state("waiting_registration_full_name")
