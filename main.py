@@ -40,6 +40,7 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🏪 Управление филиалами", callback_data="admin:stores")],
         [InlineKeyboardButton(text="💬 Глобальные быстрые ответы", callback_data="admin:quick_replies")],
         [InlineKeyboardButton(text="📨 Управление рассылками", callback_data="admin:mailings")],
+        [InlineKeyboardButton(text="👤 Переключиться на меню пользователя", callback_data="user:menu")],
         [InlineKeyboardButton(text="➕ Добавить объявление (позже)", callback_data="admin:add_ad")],
         [InlineKeyboardButton(text="📋 Мониторимые объявления (позже)", callback_data="admin:list_ads")],
         [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin:refresh")]
@@ -902,7 +903,7 @@ async def handle_mailing_trigger_time(message: Message, state: FSMContext):
 @dp.message(F.text & ~F.command)
 async def handle_registration(message: Message, state: FSMContext):
     current_state = await state.get_state()
-    user_data = await state.get_data()
+    print(f"[DEBUG registration] current_state={current_state}, text={message.text[:30]}")
 
     if current_state == "waiting_registration_full_name":
         full_name = message.text.strip()
