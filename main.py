@@ -33,6 +33,7 @@ def get_approval_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
 def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👥 Список пользователей", callback_data="admin:list_users")],
+        [InlineKeyboardButton(text="📋 Заявки на вступление", callback_data="admin:pending_requests")],
         [InlineKeyboardButton(text="🏪 Управление филиалами", callback_data="admin:stores")],
         [InlineKeyboardButton(text="💬 Глобальные быстрые ответы", callback_data="admin:quick_replies")],
         [InlineKeyboardButton(text="📨 Управление рассылками", callback_data="admin:mailings")],
@@ -88,6 +89,34 @@ def get_stores_toggle_keyboard(user_id: int, stores: list, subscribed_ids: set) 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # ===================== Обработчики =====================
+@dp.message(Command("help"))
+async def cmd_help(message: Message):
+    user_id = message.from_user.id
+    is_owner = await db.is_owner(user_id)
+    user = await db.get_user(user_id)
+
+    if is_owner or (user and user["status"] == "approved"):
+        text = (
+            "📖 <b>Справка по боту</b>\n\n"
+            "Основные команды:\n"
+            "• /start — запуск / регистрация\n"
+            "• /help — эта справка\n\n"
+            "Основные разделы:\n"
+            "• 📍 Мои филиалы\n"
+            "• 💬 Быстрые ответы\n"
+            "• 📦 Управление заказами\n\n"
+            "Для администратора доступна команда /admin"
+        )
+    else:
+        text = (
+            "📖 <b>Справка</b>\n\n"
+            "Напиши /start чтобы начать регистрацию.\n"
+            "После одобрения администратором ты получишь доступ к боту."
+        )
+
+    await message.answer(text, parse_mode="HTML")
+
+
 @dp.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -235,6 +264,42 @@ async def list_users(callback: CallbackQuery):
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@dp.callback_query(F.data == "admin:pending_requests")
+async def admin_pending_requests(callback: CallbackQuery):
+    if not await db.is_owner(callback.from_user.id) and not await db.is_admin(callback.from_user.id):
+        await callback.answer("Доступ запрещён", show_alert=True)
+        return
+
+    pending = await db.get_pending_users()
+
+    if not pending:
+        text = "📋 Заявок на вступление пока нет."
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="admin:menu")]])
+    else:
+        text = "📋 <b>Заявки на вступление</b>\n\n"
+        for u in pending:
+            text += (
+                f"👤 <b>{u['full_name']}</b>\n"
+                f"📍 Точка: {u['branch_short_name'] or 'не указана'}\n"
+                f"📱 Телефон: {u['phone'] or 'не указан'}\n"
+                f"🆔 ID: <code>{u['telegram_id']}</code>\n\n"
+            )
+
+        # Кнопки для управления первыми заявками
+        kb_buttons = []
+        for u in pending[:5]:
+            kb_buttons.append([
+                InlineKeyboardButton(text=f"✅ Одобрить {u['full_name'][:15]}", callback_data=f"set_status:{u['telegram_id']}:approved"),
+                InlineKeyboardButton(text=f"❌ Отклонить", callback_data=f"set_status:{u['telegram_id']}:restricted")
+            ])
+        kb_buttons.append([InlineKeyboardButton(text="🔙 Назад в админ-меню", callback_data="admin:menu")])
+        kb = InlineKeyboardMarkup(inline_keyboard=kb_buttons)
+
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
 
 @dp.callback_query(F.data.startswith("manage_user:"))
 async def manage_user(callback: CallbackQuery):

@@ -168,6 +168,15 @@ async def get_user(telegram_id: int):
         ) as cursor:
             return await cursor.fetchone()
 
+async def get_pending_users():
+    """Получить всех пользователей со статусом pending"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE status = 'pending' ORDER BY joined_at DESC"
+        ) as cursor:
+            return await cursor.fetchall()
+
 async def create_or_update_user(telegram_id: int, username: str, full_name: str, branch_short_name: str = None, phone: str = None, status: str = "pending"):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
