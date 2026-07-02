@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -538,6 +538,8 @@ async def user_add_quick_reply_start(callback: CallbackQuery, state: FSMContext)
 @dp.message(F.text & ~F.command)
 async def handle_quick_reply_input(message: Message, state: FSMContext):
     current_state = await state.get_state()
+    if current_state and current_state.startswith("waiting_registration_"):
+        return
     if current_state == "waiting_quick_title":
         await state.update_data(title=message.text.strip())
         await message.answer("Теперь введи **текст** ответа (можно с переносами строк):")
@@ -903,61 +905,87 @@ async def handle_mailing_trigger_time(message: Message, state: FSMContext):
 @dp.message(F.text & ~F.command)
 async def handle_registration(message: Message, state: FSMContext):
     current_state = await state.get_state()
-    print(f"[DEBUG registration] current_state={current_state}, text={message.text[:30]}")
+    text = message.text.strip()
+
+    # Клавиатура "Продолжить"
+    continue_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Продолжить")]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
 
     if current_state == "waiting_registration_full_name":
-        full_name = message.text.strip()
-        await state.update_data(full_name=full_name)
-        await message.answer("📍 Введите **краткое название точки** (филиала), например: «Ростов-Центр» или «Батайск-1»:")
+        if text == "Продолжить":
+            return  # игнор, если нажал слишком рано
+        await state.update_data(full_name=text)
+        await message.answer(
+            "📍 Введите **краткое название точки** (филиала), например: «Ростов-Центр» или «Батайск-1»:",
+            reply_markup=continue_kb
+        )
         await state.set_state("waiting_registration_branch")
 
     elif current_state == "waiting_registration_branch":
-        branch_short = message.text.strip()
-        await state.update_data(branch_short_name=branch_short)
-        await message.answer("📱 Введите ваш **номер телефона** (с кодом страны, например +7...):")
+        if text == "Продолжить":
+            return
+        await state.update_data(branch_short_name=text)
+        await message.answer(
+            "📱 Введите ваш **номер телефона** (с кодом страны, например +7...):",
+            reply_markup=continue_kb
+        )
         await state.set_state("waiting_registration_phone")
 
     elif current_state == "waiting_registration_phone":
-        phone = message.text.strip()
-        data = await state.get_data()
-        telegram_id = data.get("telegram_id")
-        username = data.get("username", "")
-        full_name = data.get("full_name")
-        branch_short_name = data.get("branch_short_name")
+        if text == "Продолжить":
+            # Финальный шаг — сохраняем и отправляем заявку
+            data = await state.get_data()
+            telegram_id = data.get("telegram_id")
+            username = data.get("username", "")
+            full_name = data.get("full_name")
+            branch_short_name = data.get("branch_short_name")
+            phone = data.get("phone")  # если уже сохранили раньше, иначе берём из текста
 
-        # Создаём пользователя со статусом pending и собранными данными
-        await db.create_or_update_user(
-            telegram_id=telegram_id,
-            username=username,
-            full_name=full_name,
-            branch_short_name=branch_short_name,
-            phone=phone,
-            status="pending"
-        )
+            if not phone:
+                phone = text  # если телефон ввели на этом шаге
 
-        # Отправляем детальную заявку владельцу
-        try:
-            await bot.send_message(
-                OWNER_TELEGRAM_ID,
-                f"🆕 **Новая заявка на доступ к боту!**\n\n"
-                f"👤 **ФИО:** {full_name}\n"
-                f"📍 **Точка/Филиал:** {branch_short_name}\n"
-                f"📱 **Телефон:** {phone}\n"
-                f"🔗 **Username:** @{username}\n"
-                f"🆔 **Telegram ID:** {telegram_id}\n\n"
-                f"Проверьте данные и подтвердите доступ:",
-                reply_markup=get_approval_keyboard(telegram_id),
-                parse_mode="Markdown"
+            await db.create_or_update_user(
+                telegram_id=telegram_id,
+                username=username,
+                full_name=full_name,
+                branch_short_name=branch_short_name,
+                phone=phone,
+                status="pending"
             )
-        except Exception as e:
-            logger.error(f"Не удалось отправить заявку владельцу: {e}")
 
+            try:
+                await bot.send_message(
+                    OWNER_TELEGRAM_ID,
+                    f"🆕 **Новая заявка на доступ к боту!**\n\n"
+                    f"👤 **ФИО:** {full_name}\n"
+                    f"📍 **Точка/Филиал:** {branch_short_name}\n"
+                    f"📱 **Телефон:** {phone}\n"
+                    f"🔗 **Username:** @{username}\n"
+                    f"🆔 **Telegram ID:** {telegram_id}\n\n"
+                    f"Проверьте данные и подтвердите доступ:",
+                    reply_markup=get_approval_keyboard(telegram_id),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Не удалось отправить заявку владельцу: {e}")
+
+            await message.answer(
+                "✅ Спасибо! Ваши данные отправлены администратору для проверки.\n\n"
+                "Как только доступ будет одобрен, бот пришлёт уведомление.",
+                reply_markup=ReplyKeyboardMarkup(remove_keyboard=True)
+            )
+            await state.clear()
+            return
+
+        # Если на шаге телефона ввели номер, а не "Продолжить"
+        await state.update_data(phone=text)
         await message.answer(
-            "✅ Спасибо! Ваши данные отправлены администратору для проверки.\n\n"
-            "Как только доступ будет одобрен, бот пришлёт уведомление.\n"
-            "Пока вы можете только ждать подтверждения."
+            "Нажмите кнопку **Продолжить**, чтобы отправить заявку.",
+            reply_markup=continue_kb
         )
-        await state.clear()
 
 
 # ===================== Подключение роутеров (регистрация имеет высокий приоритет) =====================
