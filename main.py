@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# ===================== Registration Router (высокий приоритет) =====================
+registration_router = Router()
+
 # ===================== FSM (для будущих форм) =====================
 class AdminStates(StatesGroup):
     waiting_for_restrict_reason = State()
@@ -117,7 +120,7 @@ async def cmd_help(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 
-@dp.message(CommandStart())
+@registration_router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username or ""
@@ -890,7 +893,7 @@ async def handle_mailing_trigger_time(message: Message, state: FSMContext):
 
 # ===================== РЕГИСТРАЦИЯ НОВЫХ ПОЛЬЗОВАТЕЛЕЙ =====================
 
-@dp.message(F.text & ~F.command)
+@registration_router.message(F.text & ~F.command)
 async def handle_registration(message: Message, state: FSMContext):
     current_state = await state.get_state()
     user_data = await state.get_data()
@@ -949,6 +952,9 @@ async def handle_registration(message: Message, state: FSMContext):
         )
         await state.clear()
 
+
+# ===================== Подключение роутеров (регистрация имеет высокий приоритет) =====================
+dp.include_router(registration_router)   # Регистрация первой — высокий приоритет
 
 # ===================== Запуск =====================
 async def main():
