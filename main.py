@@ -936,16 +936,13 @@ async def handle_registration(message: Message, state: FSMContext):
 
     elif current_state == "waiting_registration_phone":
         if text == "Продолжить":
-            # Финальный шаг — сохраняем и отправляем заявку
+            # Сохраняем и отправляем заявку
             data = await state.get_data()
             telegram_id = data.get("telegram_id")
             username = data.get("username", "")
             full_name = data.get("full_name")
             branch_short_name = data.get("branch_short_name")
-            phone = data.get("phone")  # если уже сохранили раньше, иначе берём из текста
-
-            if not phone:
-                phone = text  # если телефон ввели на этом шаге
+            phone = data.get("phone", text)
 
             await db.create_or_update_user(
                 telegram_id=telegram_id,
@@ -980,7 +977,7 @@ async def handle_registration(message: Message, state: FSMContext):
             await state.clear()
             return
 
-        # Если на шаге телефона ввели номер, а не "Продолжить"
+        # Сохраняем телефон и показываем кнопку "Продолжить"
         await state.update_data(phone=text)
         await message.answer(
             "Нажмите кнопку **Продолжить**, чтобы отправить заявку.",
