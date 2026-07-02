@@ -127,18 +127,15 @@ async def cmd_start(message: Message, state: FSMContext):
     username = message.from_user.username or ""
     full_name = message.from_user.full_name or ""
 
-    logger.info(f"[DEBUG cmd_start] user_id={user_id}, username=@{username}, full_name={full_name}")
+    print(f"[DEBUG cmd_start] user_id={user_id}, username=@{username}, full_name={full_name}")
 
-    # Проверяем, есть ли уже пользователь
     existing_user = await db.get_user(user_id)
     print(f"[DEBUG cmd_start] existing_user = {existing_user}")
 
     if await db.is_owner(user_id):
-        logger.info("[DEBUG cmd_start] → Owner branch")
+        print("[DEBUG cmd_start] → Owner branch")
         await message.answer(
-            "👋 Привет, владелец!\n\n"
-            "Ты имеешь полный доступ к боту.\n"
-            "Используй /admin для управления пользователями и настройками.",
+            "👋 Привет, владелец!\n\nТы имеешь полный доступ. Используй /admin",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⚙️ Админ-меню", callback_data="admin:menu")]
             ])
@@ -149,23 +146,26 @@ async def cmd_start(message: Message, state: FSMContext):
     if existing_user:
         print(f"[DEBUG cmd_start] → Existing user, status={existing_user['status']}")
         if existing_user["status"] == "approved":
-            await message.answer(
-                f"✅ Привет, {full_name.split()[0]}!\n\n"
-                "У тебя есть доступ к боту.\n"
-                "Выбери раздел:",
-                reply_markup=get_approved_user_menu()
-            )
-        elif existing_user["status"] == "restricted":
-            await message.answer("🚫 Доступ ограничен. Обратитесь к владельцу бота.")
+            await message.answer("У тебя уже есть доступ к боту.", reply_markup=get_approved_user_menu())
         else:
-            await message.answer("⏳ Твоя заявка уже отправлена владельцу. Ожидайте решения.")
+            await message.answer("⏳ Твоя заявка уже отправлена. Ожидайте решения.")
         return
 
-    # Новый пользователь — начинаем регистрацию с сбором данных
-    print("[DEBUG cmd_start] → New user → starting registration")
-    await state.update_data(telegram_id=user_id, username=username)
-    await message.answer("👋 Добро пожаловать!\n\nДля подключения к боту, пожалуйста, введите ваше **ФИО** (полностью):")
-    await state.set_state("waiting_registration_full_name")
+    # Новая упрощённая регистрация
+    print("[DEBUG cmd_start] → New user → share contact first")
+    await state.update_data(telegram_id=user_id, username=username, full_name=full_name)
+
+    share_phone_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Поделиться номером", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+    await message.answer(
+        "👋 Для подключения к боту нажми кнопку и поделись номером:",
+        reply_markup=share_phone_kb
+    )
+    await state.set_state("waiting_registration_phone")
 
 @dp.callback_query(F.data.startswith("approve:"))
 async def approve_user(callback: CallbackQuery):
