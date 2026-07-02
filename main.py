@@ -120,7 +120,7 @@ async def cmd_help(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 
-@registration_router.message(CommandStart())
+@dp.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username or ""
