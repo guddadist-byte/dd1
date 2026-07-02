@@ -736,6 +736,8 @@ async def mailing_type_start(callback: CallbackQuery, state: FSMContext):
 @dp.message(F.text & ~F.command)
 async def handle_mailing_text(message: Message, state: FSMContext):
     current_state = await state.get_state()
+    if current_state and current_state.startswith("waiting_registration_"):
+        return
     user_id = message.from_user.id
 
     if current_state == "waiting_mailing_text":
