@@ -899,7 +899,7 @@ async def handle_mailing_trigger_time(message: Message, state: FSMContext):
 
 # ===================== РЕГИСТРАЦИЯ НОВЫХ ПОЛЬЗОВАТЕЛЕЙ =====================
 
-@registration_router.message(F.text & ~F.command)
+@dp.message(F.text & ~F.command)
 async def handle_registration(message: Message, state: FSMContext):
     current_state = await state.get_state()
     user_data = await state.get_data()
